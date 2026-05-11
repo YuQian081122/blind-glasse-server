@@ -56,7 +56,7 @@ README.md
 | 第一次拉子模組 | 在父目錄：`git submodule update --init --recursive` |
 | 韌體編譯 | `cd firmware` → `pio run` |
 | 韌體推送 GitHub | `cd firmware` → `git push origin main` |
-| 拉遠端最新韌體到子模組 | `cd firmware` → `git pull origin main`；回到父目錄可 `git add firmware` 記錄子模組新 SHA |
+| 拉遠端最新韌體到子模組 | `cd firmware` → `git pull origin main`；回到父目錄執行 `git add firmware` 並 **commit**，才能把子模組指向的新 SHA 記進父倉庫（給其他 clone 父專案的人） |
 
 ---
 
