@@ -1,6 +1,7 @@
 @echo off
 setlocal EnableExtensions
 REM 切到本 bat 所在目錄；專案會 clone 到「與 bat 同層」的子資料夾
+REM 若你要的是「整包含 firmware 子模組」父專案，請勿用本 bat；改對父倉庫：git clone --recursive <父倉庫 URL>
 cd /d "%~dp0"
 
 chcp 65001 >nul
