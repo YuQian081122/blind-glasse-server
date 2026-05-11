@@ -6,3 +6,6 @@ sdkconfig.defaults
 .firecrawl/
 tools/
 archive/
+
+# 韌體：本機在 MyProject/firmware 內「單獨 git clone」blind-glasses-firmware，勿納入父倉庫版控
+firmware/

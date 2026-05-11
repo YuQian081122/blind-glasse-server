@@ -1,13 +1,12 @@
 @echo off
 setlocal EnableExtensions
-REM 切到本 bat 所在目錄；專案會 clone 到「與 bat 同層」的子資料夾
-REM 若你要的是「整包含 firmware 子模組」父專案，請勿用本 bat；改對父倉庫：git clone --recursive <父倉庫 URL>
+REM 切到本 bat 所在目錄；韌體 clone 到與 bat 同層的「firmware」資料夾（與整包 MyProject/server 並列時請用此名）
 cd /d "%~dp0"
 
 chcp 65001 >nul
 title blind-glasses-firmware — clone / PlatformIO / build / upload
 
-set "REPO_NAME=blind-glasses-firmware"
+set "REPO_NAME=firmware"
 set "REPO_URL=https://github.com/YuQian081122/blind-glasses-firmware.git"
 REM 要固定分支可改成 main，或留空用預設分支
 set "REPO_BRANCH=main"
@@ -48,15 +47,9 @@ if defined REPO_BRANCH (
 )
 
 cd /d "%~dp0%REPO_NAME%"
-REM 支援兩種版面：根目錄即 PIO，或韌體在 firmware\（整包儲存時）
 if not exist "platformio.ini" (
-  if exist "firmware\platformio.ini" (
-    echo [提示] 使用子目錄 firmware\ 作為 PlatformIO 專案根。
-    cd /d "%~dp0%REPO_NAME%\firmware"
-  ) else (
-    echo 錯誤: 找不到 platformio.ini（根目錄或 firmware\ 皆無），請確認倉庫網址與 REPO_NAME。
-    goto :fail
-  )
+  echo 錯誤: 找不到 platformio.ini，請確認已 clone 成功且 REPO_NAME=%REPO_NAME% 正確。
+  goto :fail
 )
 
 echo.

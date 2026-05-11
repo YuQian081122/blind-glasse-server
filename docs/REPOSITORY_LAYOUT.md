@@ -1,62 +1,60 @@
-# 倉庫目錄結構（本機子目錄 + GitHub 根目錄）
+# 目錄結構約定（正確版）
 
-最後更新：採用 **Git Submodule** 同時滿足兩件事：
-
-1. **GitHub `blind-glasses-firmware`**：仍是 **根目錄扁平**（`include/`、`src/`、`platformio.ini` 在倉庫根），給 CI、給只 clone 韌體的人用。
-2. **你本機整包**：韌體在 **`firmware/` 子目錄** 底下（例如 `…/blind_glasses/firmware/include/config.h`），與 `server/` 並列。
-
-兩者靠 **子模組** 連結：父目錄的 `firmware/` 資料夾本身就是一個 **完整的** `blind-glasses-firmware` clone，只是路徑在子目錄。
+以下為**唯一建議**版面：GitHub 韌體倉庫保持根目錄扁平；本機用 **`firmware/` 子資料夾內單獨 `git clone`**，**不要用 submodule** 把韌體嵌進父 git。
 
 ---
 
-## 本機應長這樣（父工作區）
+## GitHub：`blind-glasses-firmware`（倉庫根）
 
 ```
-blind_glasses/                 ← 父 git 根（本 README 所在）
-├── .git
-├── .gitmodules                ← 宣告 submodule
-├── firmware/                  ← 子模組（內部是韌體倉庫根）
-│   ├── .git
-│   ├── include/
-│   ├── src/
-│   ├── platformio.ini
-│   └── README.md              ← 韌體專案說明（在子模組內）
-├── server/                    # 可未納入父版控；依你習慣
-├── docs/
-│   └── REPOSITORY_LAYOUT.md   ← 本檔
-└── clone_build_upload_firmware.bat
+（blind-glasses-firmware 倉庫根）
+├── .github/
+├── include/           ← 標頭檔
+├── src/               ← 原始碼
+├── platformio.ini
+├── sdkconfig.defaults.template
+├── TUNING_PROFILES.md
+└── README.md
 ```
 
-- **改韌體、pio、git push 韌體**：一律 `cd firmware` 再操作。
-- **父目錄不要 `git push` 到 `blind-glasses-firmware`**（會破壞遠端版面）；韌體只從 `firmware` 裡面推。
+- 編譯：在 **clone 根目錄**（與 `platformio.ini` 同層）執行 `pio run`。
+- CI、只拉韌體的人，都只面對這一層目錄。
 
 ---
 
-## GitHub 上的韌體倉庫（不變）
-
-`https://github.com/YuQian081122/blind-glasses-firmware` 內容為：
+## 本機：`MyProject/`（整包）
 
 ```
-include/
-src/
-platformio.ini
-.github/workflows/…
-README.md
-…
+MyProject/
+├── server/                    # FastAPI，可獨立 clone 或複製
+└── firmware/                  # 單獨：git clone …/blind-glasses-firmware.git
+    ├── .git
+    ├── include/
+    ├── src/
+    └── platformio.ini         # 此層即 PlatformIO 根
 ```
 
-**沒有**多一層 `firmware/` 目錄名稱在遠端。
+### 第一次建立 `firmware/`（在 `MyProject` 根目錄執行）
 
----
+```powershell
+git clone https://github.com/YuQian081122/blind-glasses-firmware.git firmware
+```
 
-## 常見指令
+之後改韌體、推送韌體：
 
-| 目的 | 指令 |
-|------|------|
-| 第一次拉子模組 | 在父目錄：`git submodule update --init --recursive` |
-| 韌體編譯 | `cd firmware` → `pio run` |
-| 韌體推送 GitHub | `cd firmware` → `git push origin main` |
-| 拉遠端最新韌體到子模組 | `cd firmware` → `git pull origin main`；回到父目錄執行 `git add firmware` 並 **commit**，才能把子模組指向的新 SHA 記進父倉庫（給其他 clone 父專案的人） |
+```powershell
+cd firmware
+git pull
+git add -A
+git commit -m "…"
+git push origin main
+pio run
+```
+
+### 父目錄（整包）的 git
+
+- 父專案只版控 **`server/`、文件、腳本** 等；**不要**把 `firmware/` 目錄 commit 進父倉庫（本專案已將 `firmware/` 列入 `.gitignore`）。
+- 韌體的歷史與遠端**只**存在 `firmware/.git`（即 `blind-glasses-firmware` 倉庫）。
 
 ---
 
@@ -64,13 +62,13 @@ README.md
 
 | 不要 | 原因 |
 |------|------|
-| 在父目錄把 `include/` 再複製一份 | 與子模組重複，易推錯、易分叉。 |
-| 把 `origin` 指回 `blind-glasses-firmware` 然後在父目錄 `git push` | 可能把父結構推上韌體倉庫。 |
-| 手動把韌體檔只放在父目錄而不更新子模組 | GitHub 與本機 `firmware/` 會不一致。 |
+| 在父倉庫用 **submodule** 指到同一個韌體 URL | 易與「單獨 clone 到 firmware」混淆，且父目錄 `git push` 風險較高。 |
+| 把韌體檔複製一份到父目錄 `include/` | 與 `firmware/` 內 clone 重複，必然分叉。 |
+| 把 `firmware/` 目錄 commit 進父倉庫 | 會把嵌套 `.git` 或大量二進位弄進父歷史。 |
 
 ---
 
 ## 其他電腦
 
-- **只要韌體**：照舊 `git clone …/blind-glasses-firmware.git` 即可（根目錄即 PIO）。
-- **要整包（含子模組）**：clone 父倉庫後務必執行 `git submodule update --init --recursive`（或 clone 時加 `--recursive`）。
+- **只要韌體**：`git clone https://github.com/YuQian081122/blind-glasses-firmware.git`
+- **要整包**：建立 `MyProject/`，先處理 `server/`，再在 `MyProject` 根執行上面的 `git clone … firmware`。
