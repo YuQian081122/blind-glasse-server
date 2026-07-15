@@ -8,7 +8,7 @@
 
 ## 受阻（BLOCKED）
 
-（無）
+- MT-F3 實機燒錄／serial 驗證：COM3 目前可列舉但無法開啟，`platformio run -e mictest -t upload` 與 .NET SerialPort open test 都回 PermissionError/拒絕存取；WMI 查無含 COM3/platformio/esptool 的可見程序。需手動釋放 COM3（關閉任何 Serial Monitor/Arduino IDE/終端，必要時拔插 XIAO ESP32-S3 或重開 USB driver）後重跑燒錄與 playback serial 驗證。
 
 ## 硬體備註
 
@@ -17,6 +17,14 @@
 - 裝置無實體按鈕；mictest 韌體觸發只能使用自動間隔或序列埠指令。
 
 ## 迭代日誌
+
+### 迭代 8 — 2026-07-15 13:08
+- 任務：MT-F3 回覆 MP3 輪詢與喇叭播放。
+- 結果：BLOCKED（程式碼已完成且 build 通過；實機燒錄/播放驗證受 COM3 鎖定阻塞）。
+- 變更檔案：`firmware/src/mictest/main.cpp`、`docs/plans/status/mictest_status.md`。
+- 備註：mictest 韌體新增 ESP32-audioI2S 播放流程：初始化 I2S1 喇叭（引用 `config.h` 的 `I2S_BCLK_PIN`/`I2S_LRC_PIN`/`I2S_DOUT_PIN`）、POST 成功後最多 30 秒輪詢 `/api/mictest/reply.mp3`，送 `If-None-Match` 並用 `collectHeaders()` 讀 ETag；拿到新 ETag 後呼叫 `audio->connecttohost()` 播放，播放 loop 期間不進入下一輪錄音，serial 會輸出 `reply wait`、`playback start`、`playback done`。確認 ESP32-audioI2S 此版本無 memory-bytes 播放入口；播放 URL 無法附自訂 header，但目前 `main.py` token middleware 只精確保護 `/api/mictest`，不攔 `/api/mictest/reply.mp3` 子路徑，mictest-only server 也無 middleware。
+- 驗證：`py -3 -m platformio run -e mictest` → SUCCESS。啟動 mictest-only server 與 Cloudflare tunnel 後 `https://www.blind-glasses.org/mictest` → 200。`py -3 -m platformio run -e mictest -t upload` → FAILED，COM3 PermissionError；`.NET SerialPort('COM3').Open()` → 拒絕存取；`Get-CimInstance Win32_Process` 查無含 `COM3`/`platformio device monitor`/`esptool` 的可見程序。`ReadLints` 僅為既有 clang/PlatformIO 參數與 Arduino include 誤報，實際 PlatformIO build 通過。
+- push：未推送（MT-F3 尚未完成實機驗證；若需保留目前 build-pass 程式碼，可另行 commit partial）。
 
 ### 迭代 7 — 2026-07-15 12:58
 - 任務：MT-F2 mictest 韌體錄音並上傳 `/api/mictest`。
