@@ -23,12 +23,21 @@ class MicTestState(BaseModel):
     reply_text: Optional[str]
     tts_ready: bool
     tts_ms: Optional[float]
+    record_request_id: int
+    record_status: str
+
+
+class MicTestCommand(BaseModel):
+    record_request_id: int
+    record_status: str
 
 
 _lock = threading.Lock()
 _latest_wav: Optional[bytes] = None
 _reply_mp3: Optional[bytes] = None
 _reply_etag: Optional[str] = None
+_record_request_id = 0
+_record_status = "idle"
 _state = MicTestState(
     seq=0,
     received_at=None,
@@ -38,15 +47,19 @@ _state = MicTestState(
     reply_text=None,
     tts_ready=False,
     tts_ms=None,
+    record_request_id=0,
+    record_status="idle",
 )
 
 
 def reset_mictest_state() -> None:
-    global _latest_wav, _reply_mp3, _reply_etag, _state
+    global _latest_wav, _reply_mp3, _reply_etag, _record_request_id, _record_status, _state
     with _lock:
         _latest_wav = None
         _reply_mp3 = None
         _reply_etag = None
+        _record_request_id = 0
+        _record_status = "idle"
         _state = MicTestState(
             seq=0,
             received_at=None,
@@ -56,6 +69,8 @@ def reset_mictest_state() -> None:
             reply_text=None,
             tts_ready=False,
             tts_ms=None,
+            record_request_id=0,
+            record_status="idle",
         )
 
 
@@ -159,12 +174,13 @@ async def upload_mictest_wav(request: Request, background_tasks: BackgroundTasks
     duration = _duration_sec(wav_bytes)
     received_at = datetime.fromtimestamp(time.time(), timezone.utc).isoformat()
 
-    global _latest_wav, _reply_etag, _reply_mp3, _state
+    global _latest_wav, _reply_etag, _reply_mp3, _record_status, _state
     with _lock:
         seq = _state.seq + 1
         _latest_wav = wav_bytes
         _reply_mp3 = None
         _reply_etag = None
+        _record_status = "uploaded"
         _state = MicTestState(
             seq=seq,
             received_at=received_at,
@@ -174,11 +190,34 @@ async def upload_mictest_wav(request: Request, background_tasks: BackgroundTasks
             reply_text=None,
             tts_ready=False,
             tts_ms=None,
+            record_request_id=_record_request_id,
+            record_status=_record_status,
         )
         response_state = _state
 
     background_tasks.add_task(_run_asr, seq, wav_bytes)
     return response_state
+
+
+@router.post("/api/mictest/trigger", response_model=MicTestCommand)
+async def trigger_mictest_recording() -> MicTestCommand:
+    global _record_request_id, _record_status, _state
+    with _lock:
+        _record_request_id += 1
+        _record_status = "queued"
+        _state = _state.model_copy(
+            update={
+                "record_request_id": _record_request_id,
+                "record_status": _record_status,
+            }
+        )
+        return MicTestCommand(record_request_id=_record_request_id, record_status=_record_status)
+
+
+@router.get("/api/mictest/command", response_model=MicTestCommand)
+async def get_mictest_command() -> MicTestCommand:
+    with _lock:
+        return MicTestCommand(record_request_id=_record_request_id, record_status=_record_status)
 
 
 @router.get("/api/mictest/latest.wav")

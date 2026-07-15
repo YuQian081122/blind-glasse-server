@@ -54,6 +54,9 @@ class MicTestPageTest(unittest.TestCase):
         self.assertIn("/api/mictest/state", html)
         self.assertIn("/api/mictest/latest.wav", html)
         self.assertIn("/api/mictest/reply.mp3", html)
+        self.assertIn("/api/mictest/trigger", html)
+        self.assertIn('id="recordButton"', html)
+        self.assertIn('id="recordCommandStatus"', html)
         self.assertIn("decodeAudioData", html)
 
 
@@ -215,6 +218,37 @@ class MicTestApiTest(unittest.TestCase):
         reply = self.client.get("/api/mictest/reply.mp3")
 
         self.assertEqual(reply.status_code, 404)
+
+    def test_mictest_trigger_exposes_one_shot_record_command(self):
+        first = self.client.post("/api/mictest/trigger")
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.json()["record_request_id"], 1)
+        self.assertEqual(first.json()["record_status"], "queued")
+
+        command = self.client.get("/api/mictest/command")
+        self.assertEqual(command.status_code, 200)
+        self.assertEqual(command.json()["record_request_id"], 1)
+        self.assertEqual(command.json()["record_status"], "queued")
+
+        second = self.client.post("/api/mictest/trigger")
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(second.json()["record_request_id"], 2)
+        self.assertEqual(second.json()["record_status"], "queued")
+
+    def test_mictest_upload_marks_current_record_command_uploaded(self):
+        self.client.post("/api/mictest/trigger")
+        wav_data = _make_wav()
+
+        upload = self.client.post(
+            "/api/mictest",
+            content=wav_data,
+            headers={"Content-Type": "audio/wav", "X-Device-Token": "test-token"},
+        )
+
+        self.assertEqual(upload.status_code, 200)
+        command = self.client.get("/api/mictest/command")
+        self.assertEqual(command.json()["record_request_id"], 1)
+        self.assertEqual(command.json()["record_status"], "uploaded")
 
     def test_mictest_returns_404_before_first_upload(self):
         latest = self.client.get("/api/mictest/latest.wav")

@@ -57,6 +57,30 @@
       overflow-wrap: anywhere;
     }
 
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      margin: 20px 0;
+    }
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 20px;
+      background: #38bdf8;
+      color: #082f49;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: 0.65;
+    }
+
     #waveform {
       width: 100%;
       height: 240px;
@@ -74,7 +98,15 @@
 <body>
   <main>
     <h1>麥克風端到端測試</h1>
-    <p class="muted">每 2 秒輪詢 <code>/api/mictest/state</code>；收到新 seq 時下載 WAV、繪製波形並更新播放器。</p>
+    <p class="muted">按下開始錄音後請立刻說話；眼鏡會收到一次性命令並錄 3 秒，頁面每 2 秒輪詢狀態與波形。</p>
+
+    <section class="card controls" aria-label="record controls">
+      <button id="recordButton" type="button">開始錄音 3 秒</button>
+      <div>
+        <div class="label">錄音命令狀態</div>
+        <div id="recordCommandStatus" class="value">尚未送出</div>
+      </div>
+    </section>
 
     <canvas id="waveform" width="1000" height="240" aria-label="最新錄音波形"></canvas>
 
@@ -131,6 +163,7 @@
     const stateUrl = "/api/mictest/state";
     const latestWavUrl = "/api/mictest/latest.wav";
     const replyMp3Url = "/api/mictest/reply.mp3";
+    const triggerUrl = "/api/mictest/trigger";
     const pollIntervalMs = 2000;
 
     let lastSeq = 0;
@@ -141,6 +174,30 @@
     };
 
     const cacheBusted = (url) => `${url}?t=${Date.now()}`;
+
+    const triggerRecording = async () => {
+      const button = document.getElementById("recordButton");
+      button.disabled = true;
+      setText("recordCommandStatus", "送出中...");
+      try {
+        const res = await fetch(triggerUrl, { method: "POST", cache: "no-store" });
+        if (!res.ok) {
+          setText("recordCommandStatus", `trigger HTTP ${res.status}`);
+          return;
+        }
+        const command = await res.json();
+        setText(
+          "recordCommandStatus",
+          `已送出 #${command.record_request_id}，請現在說話 3 秒`
+        );
+      } catch (err) {
+        setText("recordCommandStatus", String(err));
+      } finally {
+        setTimeout(() => {
+          button.disabled = false;
+        }, 3000);
+      }
+    };
 
     const drawEmptyWaveform = (message) => {
       const canvas = document.getElementById("waveform");
@@ -215,6 +272,9 @@
       setText("replyText", state.reply_text);
       setText("ttsStatus", state.tts_ready ? "ready" : "waiting");
       setText("ttsMs", state.tts_ms == null ? "-" : `${state.tts_ms}ms`);
+      if (state.record_request_id != null) {
+        setText("recordCommandStatus", `#${state.record_request_id} ${state.record_status || "idle"}`);
+      }
 
       if (state.seq && state.seq !== lastSeq) {
         lastSeq = state.seq;
@@ -226,6 +286,9 @@
     };
 
     drawEmptyWaveform("等待錄音...");
+    document.getElementById("recordButton").addEventListener("click", () => {
+      triggerRecording().catch((err) => setText("recordCommandStatus", String(err)));
+    });
     renderState().catch((err) => setText("asrText", String(err)));
     setInterval(() => {
       renderState().catch((err) => setText("asrText", String(err)));
