@@ -1,10 +1,12 @@
 import io
 import unittest
 import wave
+from unittest import mock
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+import mictest_api
 from mictest_api import reset_mictest_state, router
 
 
@@ -46,6 +48,37 @@ class MicTestApiTest(unittest.TestCase):
         self.assertEqual(latest.status_code, 200)
         self.assertTrue(latest.headers["content-type"].startswith("audio/wav"))
         self.assertEqual(latest.content, wav_data)
+
+    def test_mictest_updates_state_with_asr_text(self):
+        wav_data = _make_wav()
+
+        with mock.patch.object(mictest_api, "_transcribe_wav_bytes", return_value="測試中文"):
+            upload = self.client.post(
+                "/api/mictest",
+                content=wav_data,
+                headers={"Content-Type": "audio/wav", "X-Device-Token": "test-token"},
+            )
+
+        self.assertEqual(upload.status_code, 200)
+        state = self.client.get("/api/mictest/state").json()
+        self.assertEqual(state["seq"], 1)
+        self.assertEqual(state["asr_text"], "測試中文")
+        self.assertIsInstance(state["asr_ms"], float)
+
+    def test_mictest_reports_explicit_asr_empty_result(self):
+        wav_data = _make_wav()
+
+        with mock.patch.object(mictest_api, "_transcribe_wav_bytes", return_value=""):
+            upload = self.client.post(
+                "/api/mictest",
+                content=wav_data,
+                headers={"Content-Type": "audio/wav", "X-Device-Token": "test-token"},
+            )
+
+        self.assertEqual(upload.status_code, 200)
+        state = self.client.get("/api/mictest/state").json()
+        self.assertIn("ASR_EMPTY", state["asr_text"])
+        self.assertIsInstance(state["asr_ms"], float)
 
     def test_mictest_returns_404_before_first_upload(self):
         latest = self.client.get("/api/mictest/latest.wav")

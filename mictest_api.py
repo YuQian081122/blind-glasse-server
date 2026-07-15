@@ -5,7 +5,7 @@ import wave
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
@@ -65,8 +65,36 @@ def _duration_sec(wav_bytes: bytes) -> float:
         raise HTTPException(status_code=400, detail="invalid_wav")
 
 
+def _transcribe_wav_bytes(wav_bytes: bytes) -> str:
+    from local_whisper_asr import transcribe_wav_bytes
+
+    return transcribe_wav_bytes(wav_bytes)
+
+
+def _run_asr(seq: int, wav_bytes: bytes) -> None:
+    started = time.perf_counter()
+    try:
+        text = _transcribe_wav_bytes(wav_bytes).strip()
+        if not text:
+            text = "ASR_EMPTY: 模型未載入、未辨識到語音，或轉寫結果為空"
+    except Exception as exc:
+        text = f"ASR_ERROR: {type(exc).__name__}: {exc}"
+    elapsed_ms = round((time.perf_counter() - started) * 1000.0, 2)
+
+    global _state
+    with _lock:
+        if _state.seq != seq:
+            return
+        _state = _state.model_copy(
+            update={
+                "asr_text": text,
+                "asr_ms": elapsed_ms,
+            }
+        )
+
+
 @router.post("/api/mictest", response_model=MicTestState)
-async def upload_mictest_wav(request: Request) -> MicTestState:
+async def upload_mictest_wav(request: Request, background_tasks: BackgroundTasks) -> MicTestState:
     content_type = (request.headers.get("content-type") or "").split(";", 1)[0].strip().lower()
     if content_type != "audio/wav":
         raise HTTPException(status_code=415, detail="expected_audio_wav")
@@ -80,9 +108,10 @@ async def upload_mictest_wav(request: Request) -> MicTestState:
 
     global _latest_wav, _state
     with _lock:
+        seq = _state.seq + 1
         _latest_wav = wav_bytes
         _state = MicTestState(
-            seq=_state.seq + 1,
+            seq=seq,
             received_at=received_at,
             duration_sec=duration,
             asr_text=None,
@@ -91,7 +120,10 @@ async def upload_mictest_wav(request: Request) -> MicTestState:
             tts_ready=False,
             tts_ms=None,
         )
-        return _state
+        response_state = _state
+
+    background_tasks.add_task(_run_asr, seq, wav_bytes)
+    return response_state
 
 
 @router.get("/api/mictest/latest.wav")
