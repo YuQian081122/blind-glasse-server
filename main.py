@@ -115,6 +115,7 @@ from asr_intent import get_last_transcript
 from gemini_client import analyze_scene
 from line_gemini_chat import family_line_reply
 from line_bot_router import router as line_bot_router
+from mictest_api import router as mictest_router
 from imu_gps_fusion import get_fusion
 from intent_router import handle_asr_and_route
 from monitor_api import create_monitor_router
@@ -760,6 +761,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Smart Blind Glasses Server", lifespan=lifespan)
 app.include_router(line_bot_router)
+app.include_router(mictest_router)
 app.include_router(
     create_monitor_router(
         _monitor_state,
@@ -780,6 +782,7 @@ _DEVICE_TOKEN_PROTECTED_PATHS = frozenset(
     {
         "/api/gemini",
         "/api/asr",
+        "/api/mictest",
         "/api/imu",
         "/api/gps",
         "/api/frame",
