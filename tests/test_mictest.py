@@ -1,6 +1,10 @@
 import io
+import os
 from pathlib import Path
+import time
 import unittest
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 import wave
 from unittest import mock
 
@@ -22,6 +26,22 @@ def _make_wav(duration_sec: float = 0.05, sample_rate: int = 16000) -> bytes:
     return buf.getvalue()
 
 
+def _request_bytes(method: str, url: str, body: bytes | None = None, headers: dict[str, str] | None = None):
+    request = Request(url, data=body, headers=headers or {}, method=method)
+    try:
+        with urlopen(request, timeout=15) as response:
+            return response.status, dict(response.headers), response.read()
+    except HTTPError as exc:
+        return exc.code, dict(exc.headers), exc.read()
+
+
+def _header(headers: dict[str, str], name: str) -> str:
+    for key, value in headers.items():
+        if key.lower() == name.lower():
+            return value
+    return ""
+
+
 class MicTestPageTest(unittest.TestCase):
     def test_mictest_page_contains_waveform_and_audio_controls(self):
         page = Path(__file__).resolve().parents[1] / "static" / "mictest.html"
@@ -35,6 +55,67 @@ class MicTestPageTest(unittest.TestCase):
         self.assertIn("/api/mictest/latest.wav", html)
         self.assertIn("/api/mictest/reply.mp3", html)
         self.assertIn("decodeAudioData", html)
+
+
+@unittest.skipUnless(
+    os.environ.get("MICTEST_INTEGRATION_BASE_URL"),
+    "integration marker: set MICTEST_INTEGRATION_BASE_URL to a running server",
+)
+class MicTestIntegrationTest(unittest.TestCase):
+    def setUp(self):
+        self.base_url = os.environ["MICTEST_INTEGRATION_BASE_URL"].rstrip("/")
+
+    def test_live_server_mictest_flow(self):
+        page_status, _, page_body = _request_bytes("GET", f"{self.base_url}/mictest")
+        self.assertEqual(page_status, 200)
+        self.assertIn(b"/api/mictest/state", page_body)
+
+        wav_data = _make_wav(duration_sec=0.1)
+        upload_status, _, _ = _request_bytes(
+            "POST",
+            f"{self.base_url}/api/mictest",
+            body=wav_data,
+            headers={"Content-Type": "audio/wav", "X-Device-Token": "integration"},
+        )
+        self.assertEqual(upload_status, 200)
+
+        state_status, _, state_body = _request_bytes("GET", f"{self.base_url}/api/mictest/state")
+        self.assertEqual(state_status, 200)
+        self.assertIn(b'"seq":', state_body)
+
+        latest_status, latest_headers, latest_body = _request_bytes(
+            "GET",
+            f"{self.base_url}/api/mictest/latest.wav",
+        )
+        self.assertEqual(latest_status, 200)
+        self.assertTrue(_header(latest_headers, "Content-Type").startswith("audio/wav"))
+        self.assertEqual(latest_body, wav_data)
+
+        reply_status = 404
+        reply_headers: dict[str, str] = {}
+        reply_body = b""
+        for _ in range(40):
+            reply_status, reply_headers, reply_body = _request_bytes(
+                "GET",
+                f"{self.base_url}/api/mictest/reply.mp3",
+            )
+            if reply_status == 200:
+                break
+            time.sleep(0.5)
+
+        self.assertEqual(reply_status, 200)
+        self.assertTrue(_header(reply_headers, "Content-Type").startswith("audio/mpeg"))
+        self.assertGreater(len(reply_body), 1000)
+        etag = _header(reply_headers, "ETag")
+        self.assertTrue(etag)
+
+        cached_status, cached_headers, _ = _request_bytes(
+            "GET",
+            f"{self.base_url}/api/mictest/reply.mp3",
+            headers={"If-None-Match": etag or ""},
+        )
+        self.assertEqual(cached_status, 304)
+        self.assertEqual(_header(cached_headers, "ETag"), etag)
 
 
 class MicTestApiTest(unittest.TestCase):
