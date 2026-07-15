@@ -8,7 +8,7 @@
 
 ## 受阻（BLOCKED）
 
-- MT-F3 實機燒錄／serial 驗證：COM3 目前可列舉但無法開啟，`platformio run -e mictest -t upload` 與 .NET SerialPort open test 都回 PermissionError/拒絕存取；WMI 查無含 COM3/platformio/esptool 的可見程序。需手動釋放 COM3（關閉任何 Serial Monitor/Arduino IDE/終端，必要時拔插 XIAO ESP32-S3 或重開 USB driver）後重跑燒錄與 playback serial 驗證。
+（無）
 
 ## 硬體備註
 
@@ -17,6 +17,14 @@
 - 裝置無實體按鈕；mictest 韌體觸發只能使用自動間隔或序列埠指令。
 
 ## 迭代日誌
+
+### 迭代 9 — 2026-07-15 13:25
+- 任務：MT-F3 COM3 釋放後重試燒錄與回覆播放驗證。
+- 結果：DONE（喇叭是否實際出聲仍留到 MT-E1 人耳確認）。
+- 變更檔案：`firmware/src/mictest/main.cpp`、`docs/plans/mic_test_plan.md`、`docs/plans/status/mictest_status.md`。
+- 備註：COM3 已可開啟後，成功燒錄 MT-F3 韌體。mictest 韌體會在 POST 200 後輪詢 `/api/mictest/reply.mp3`，取得新 ETag 後使用 ESP32-audioI2S（I2S1）播放；播放期間持續呼叫 `audio->loop()` 並等待 `isRunning()` 結束，避免錄音與播放重疊。serial 已顯示 `playback start` 與 `playback done ran=yes`，代表韌體播放流程完成；實體喇叭是否有聲音需 MT-E1 請使用者人耳確認。
+- 驗證：`py -3 -m platformio run -e mictest` → SUCCESS；`py -3 -m platformio run -e mictest -t upload` → SUCCESS（COM3）。啟動 mictest-only server 與 Cloudflare tunnel 後，serial monitor 顯示：`POST /api/mictest code=200 upload_ms=7105 bytes=96044`、`playback start wait_ms=2142 etag="2-150d72407d7fec8a"`、`playback done elapsed_ms=8717 ran=yes`；下一輪也顯示 `POST /api/mictest code=200` 與 `playback start wait_ms=2772`。公開 state：`seq=3`、`duration_sec=3.0`、`tts_ready=true`。`ReadLints` 仍為既有 clang/PlatformIO 參數與 Arduino include 誤報，實際 PlatformIO build/燒錄通過。
+- push：`8c650b1` 已推送到 firmware `origin/main`。
 
 ### 迭代 8 — 2026-07-15 13:08
 - 任務：MT-F3 回覆 MP3 輪詢與喇叭播放。

@@ -65,7 +65,7 @@
   - 觸發方式（無按鈕）：預設**每 15 秒自動一輪**；序列埠輸入 `r` 立即錄一次、`i <ms>` 改間隔。
   - 序列日誌統一 `[MICTEST]` 前綴：錄音樣本數、上傳耗時、HTTP 狀態碼。
   - 驗證：燒錄 `-e mictest`，serial 看到 POST 200；`/mictest` 頁面出現真實波形（**環境音即可，尚不需人講話**）。
-- [ ] **MT-F3** 回覆播放：POST 成功後輪詢 `GET /api/mictest/reply.mp3`（If-None-Match，最多等 30s），拿到新音檔用 ESP32-audioI2S（`I2S_NUM_1`）播放；播放期間暫停錄音（先錄後播、不同 I2S port，時序上完全錯開最保險）。
+- [x] **MT-F3** 回覆播放：POST 成功後輪詢 `GET /api/mictest/reply.mp3`（If-None-Match，最多等 30s），拿到新音檔用 ESP32-audioI2S（`I2S_NUM_1`）播放；播放期間暫停錄音（先錄後播、不同 I2S port，時序上完全錯開最保險）。
   - 序列日誌：等待耗時、播放開始/結束。
   - 驗證：燒錄後 serial 顯示播放開始；喇叭是否真的出聲需人耳確認（NEEDS-HUMAN）。
 
