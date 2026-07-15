@@ -1,0 +1,6 @@
+﻿# Large weights: keep locally or use releases/LFS; do not commit
+*.pt
+*.onnx
+*.task
+!.gitkeep
+!yolo.pt

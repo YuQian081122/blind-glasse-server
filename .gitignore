@@ -1,0 +1,47 @@
+.git_server_repo_backup/
+
+# Conservative marker: nested duplicate server snapshot is not runtime source.
+# Runtime entry point remains ./main.py; do not edit ./server/ for behavior.
+server/
+
+.env
+.env.*
+!.env.example
+
+# Local secrets / credentials
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+service-account*.json
+*secret*
+*token*
+
+.venv/
+.venv.broken/
+venv/
+cloudflared.exe
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+.ruff_cache/
+.local_cache/
+Ultralytics/
+*.log
+*.sqlite
+*.sqlite3
+*.db
+
+audio/
+data/
+home_location.json
+
+# Large ML weights / generated models
+models/*.pt
+models/*.onnx
+models/*.task
+!models/.gitkeep
+!models/yolo.pt

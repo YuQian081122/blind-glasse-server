@@ -1,0 +1,966 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Vision 導盲監控終端</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0" />
+  <style>
+    :root {
+      --bg-dark: #050505;
+      --panel-bg: #0a0a0a;
+      --border-color: #222;
+      --text-primary: #ededed;
+      --text-secondary: #888;
+      --accent: #fff;
+      --status-ok: #00e676;
+      --status-err: #ff3d00;
+    }
+    * { box-sizing: border-box; }
+    body {
+      background-color: var(--bg-dark);
+      background-image:
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 30px 30px;
+      color: var(--text-primary);
+      font-family: "Inter", sans-serif;
+      margin: 0;
+      padding: 1.25rem;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 0.75rem;
+    }
+    .header-title {
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 1.1rem;
+      letter-spacing: 0.8px;
+      font-weight: 600;
+    }
+    .system-clock {
+      font-family: "JetBrains Mono", monospace;
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+    }
+    .main-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 420px;
+      gap: 1rem;
+      min-height: 0;
+      flex: 1;
+    }
+    .video-container {
+      position: relative;
+      border: 1px solid var(--border-color);
+      background: #000;
+      overflow: hidden;
+      min-height: 420px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .video-offline {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-secondary);
+      background:
+        radial-gradient(circle at 50% 40%, #2a2e35 0%, #1b1f26 35%, #11151b 65%, #0a0d12 100%);
+      z-index: 1;
+      text-align: center;
+      padding: 1rem;
+      gap: 0.4rem;
+      isolation: isolate;
+    }
+    .video-offline span { font-size: 30px; opacity: 0.6; }
+    .offline-3d-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      opacity: 0.9;
+      pointer-events: none;
+    }
+    .offline-overlay-content {
+      position: relative;
+      z-index: 1;
+      background: rgba(10, 12, 16, 0.42);
+      border: 1px solid var(--border-color);
+      padding: 0.6rem 0.9rem;
+      border-radius: 8px;
+      backdrop-filter: blur(2px);
+    }
+    .video-feed {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      z-index: 2;
+      position: relative;
+      display: block;
+    }
+    .cam-label {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--border-color);
+      background: #000;
+      padding: 3px 8px;
+      font-size: 0.75rem;
+      font-family: "JetBrains Mono", monospace;
+    }
+    .rec-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--status-err);
+      animation: blink 2s infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+    .data-panel {
+      border: 1px solid var(--border-color);
+      background: var(--panel-bg);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .data-group {
+      border-bottom: 1px solid var(--border-color);
+      padding: 0.95rem;
+      min-height: 0;
+    }
+    .data-group:last-child { border-bottom: none; }
+    .data-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-secondary);
+      font-size: 0.72rem;
+      margin-bottom: 8px;
+    }
+    .data-value {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.9rem;
+      line-height: 1.55;
+      word-break: break-word;
+    }
+    .mono-list {
+      margin: 0;
+      padding-left: 1rem;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.8rem;
+      color: #d7d7d7;
+      max-height: 150px;
+      overflow: auto;
+    }
+    .mono-list li { margin: 0.2rem 0; }
+    .audio-controls {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.5rem;
+    }
+    .audio-btn {
+      border: 1px solid var(--border-color);
+      background: #111;
+      color: var(--text-primary);
+      padding: 0.38rem 0.7rem;
+      font-size: 0.78rem;
+      cursor: pointer;
+      font-family: "JetBrains Mono", monospace;
+    }
+    .audio-btn:hover { background: #1b1b1b; }
+    .status-footer {
+      padding: 0.75rem 0.95rem;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.75rem;
+      background: #050505;
+      gap: 0.5rem;
+    }
+    .conn-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--status-ok);
+      white-space: nowrap;
+    }
+    .conn-indicator.error { color: var(--status-err); }
+    .mini { color: var(--text-secondary); font-size: 0.75rem; }
+    .ok { color: var(--status-ok); }
+    .err { color: var(--status-err); }
+    .telemetry-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .telemetry-chip {
+      border: 1px solid var(--border-color);
+      padding: 6px 8px;
+      background: #0f0f0f;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.78rem;
+    }
+    .chip-key { color: var(--text-secondary); }
+    .chip-val { font-weight: 600; }
+    .chip-move { color: #7cffc4; }
+    .chip-stop { color: #ffcf66; }
+    .chip-turn { color: #8ad8ff; }
+    .axis-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+    }
+    .axis-table td {
+      border-top: 1px dashed #2a2a2a;
+      padding: 4px 2px;
+    }
+    .axis-name { color: var(--text-secondary); width: 44px; }
+    .axis-val { text-align: right; }
+    .mono-num { font-family: "JetBrains Mono", monospace; }
+
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1 class="header-title">
+      <span class="material-symbols-outlined">memory</span>
+      VISION SYSTEM 監控終端
+    </h1>
+    <div class="system-clock" id="sys-clock">SYNCING...</div>
+  </div>
+
+  <div class="main-layout">
+    <div class="video-container">
+      <div class="video-offline" id="offline-state">
+        <canvas id="offline-3d" class="offline-3d-canvas" aria-hidden="true"></canvas>
+        <div class="offline-overlay-content">
+          <span class="material-symbols-outlined">videocam_off</span>
+          <div>NO SIGNAL / AWAITING STREAM</div>
+          <div id="frame-hint" class="mini">等待 /ws/viewer 或 /api/monitor/frame</div>
+        </div>
+      </div>
+      <img id="frame" class="video-feed" alt="camera stream" />
+      <div class="cam-label">
+        <div class="rec-dot"></div>
+        CAM_01 [FIRST_PERSON]
+      </div>
+    </div>
+
+    <div class="data-panel">
+      <div class="data-group">
+        <div class="data-label">
+          <span class="material-symbols-outlined" style="font-size:16px;">sensors</span>
+          TELEMETRY / 即時六軸
+        </div>
+        <div class="data-value" id="telemetry-val">WAITING...</div>
+      </div>
+
+      <div class="data-group">
+        <div class="data-label">
+          <span class="material-symbols-outlined" style="font-size:16px;">account_tree</span>
+          NAV_STATE / 導航狀態
+        </div>
+        <div class="data-value" id="nav-val">WAITING...</div>
+      </div>
+
+      <div class="data-group">
+        <div class="data-label">
+          <span class="material-symbols-outlined" style="font-size:16px;">my_location</span>
+          GPS / 家屬狀態
+        </div>
+        <div class="data-value" id="gps-val">WAITING...</div>
+      </div>
+
+      <div class="data-group">
+        <div class="data-label">
+          <span class="material-symbols-outlined" style="font-size:16px;">graphic_eq</span>
+          VOICE INTENT
+        </div>
+        <ul id="voice-list" class="mono-list"></ul>
+      </div>
+
+      <div class="data-group">
+        <div class="data-label">
+          <span class="material-symbols-outlined" style="font-size:16px;">visibility</span>
+          VISION / 偵測信度
+        </div>
+        <div class="data-value" id="vision-val">WAITING...</div>
+      </div>
+
+      <div class="data-group">
+        <div class="data-label">
+          <span class="material-symbols-outlined" style="font-size:16px;">event</span>
+          RECENT EVENTS
+        </div>
+        <ul id="events-list" class="mono-list"></ul>
+      </div>
+
+      <div class="data-group">
+        <div class="data-label">
+          <span class="material-symbols-outlined" style="font-size:16px;">volume_up</span>
+          AUDIO CONTROL
+        </div>
+        <div class="audio-controls">
+          <button id="audio-play" class="audio-btn" type="button">PLAY</button>
+          <button id="audio-pause" class="audio-btn" type="button">PAUSE</button>
+          <button id="audio-reload" class="audio-btn" type="button">RELOAD</button>
+        </div>
+        <div class="data-value" id="audio-status">WAITING...</div>
+        <audio id="audio-player" preload="none" style="width:100%; margin-top:8px;"></audio>
+      </div>
+
+      <div class="status-footer">
+        <div class="conn-indicator" id="conn-status">
+          <span class="material-symbols-outlined" style="font-size:14px;">check_circle</span>
+          SERVER_CONNECTED
+        </div>
+        <div>UPTIME: <span id="uptime">00:00:00</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from "/monitor/vendor/three.module.js";
+    const frameEl = document.getElementById("frame");
+    const offlineEl = document.getElementById("offline-state");
+    const offline3dCanvas = document.getElementById("offline-3d");
+    const frameHintEl = document.getElementById("frame-hint");
+    const telemetryEl = document.getElementById("telemetry-val");
+    const navEl = document.getElementById("nav-val");
+    const gpsEl = document.getElementById("gps-val");
+    const visionEl = document.getElementById("vision-val");
+    const voiceEl = document.getElementById("voice-list");
+    const eventsEl = document.getElementById("events-list");
+    const connStatusEl = document.getElementById("conn-status");
+    const audioPlayerEl = document.getElementById("audio-player");
+    const audioStatusEl = document.getElementById("audio-status");
+    const audioPlayBtn = document.getElementById("audio-play");
+    const audioPauseBtn = document.getElementById("audio-pause");
+    const audioReloadBtn = document.getElementById("audio-reload");
+
+    let lastFrameUrl = null;
+    let offline3d = null;
+    const bootTs = Date.now();
+    const REPORT_DEMO_MODE = false; // 報告展示用：true=顯示假資料、false=連真實後端
+
+    const DEMO_STATE = {
+      mode: "-",
+      esp32_ip: "-",
+      fusion: {
+        gx: 3.22,
+        gy: -0.41,
+        gz: 18.57,
+        heading_deg: null,
+        turning: null,
+        is_moving: false,
+        motion_state: "已停止",
+        confidence: null,
+        ax: null,
+        ay: null,
+        az: null,
+        last_imu_sample: null
+      },
+      navigation: {},
+      traffic_light: {},
+      item_search: {
+        active: false,
+        phase: "-",
+        target: "-",
+        last_guidance: "-",
+        vision_status: "-"
+      },
+      family: {
+        line_notify_enable: false,
+        last_gps: {
+          lat: null,
+          lng: null,
+          map_url: ""
+        },
+        fall: { active: false }
+      },
+      server_health: {
+        uptime_sec: null,
+        last_imu_age_sec: 0.2,
+        last_gps_age_sec: null
+      },
+      recent_voice: []
+    };
+
+    const DEMO_EVENTS = [];
+
+    const safe = (v, d = "-") => (v === null || v === undefined || Number.isNaN(v)) ? d : v;
+    const axis3 = (x, y, z) => `${safe(x)}, ${safe(y)}, ${safe(z)}`;
+    const esc = (s) => String(s ?? "-").replace(/[<>&]/g, (m) => ({ "<":"&lt;", ">":"&gt;", "&":"&amp;" }[m]));
+    const fmtNum = (v, digits = 2) => (v === null || v === undefined || Number.isNaN(v)) ? "-" : Number(v).toFixed(digits);
+    const stepText = (step) => {
+      if (!step) return "-";
+      return `${safe(step.instruction, "-")} (${safe(step.distance_m, 0)}m) [${safe(step.index, 0) + 1}/${safe(step.total, 0)}]`;
+    };
+    const buildAudioUrl = () => `/audio/latest?t=${Date.now()}`;
+    const zhMotion = (motionState, isMoving) => {
+      if (motionState === "moving") return "移動中";
+      if (motionState === "stopped") return "已停止";
+      if (motionState) return motionState;
+      return isMoving ? "移動中" : "已停止";
+    };
+    const zhTurning = (turning) => {
+      if (turning === "left") return "左轉";
+      if (turning === "right") return "右轉";
+      if (!turning) return "無";
+      return turning;
+    };
+
+    function setAudioStatus(text) {
+      if (audioStatusEl) audioStatusEl.textContent = text;
+    }
+
+    function reloadAudioSource() {
+      if (!audioPlayerEl) return;
+      audioPlayerEl.src = buildAudioUrl();
+      audioPlayerEl.load();
+      setAudioStatus("Audio source reloaded");
+    }
+
+    if (audioPlayerEl) {
+      audioPlayerEl.src = buildAudioUrl();
+      audioPlayerEl.addEventListener("play", () => setAudioStatus("Playing /audio/latest"));
+      audioPlayerEl.addEventListener("pause", () => setAudioStatus("Paused"));
+      audioPlayerEl.addEventListener("ended", () => setAudioStatus("Playback ended"));
+      audioPlayerEl.addEventListener("error", () => setAudioStatus("Audio load/play failed"));
+    }
+    if (audioPlayBtn) {
+      audioPlayBtn.addEventListener("click", async () => {
+        if (!audioPlayerEl) return;
+        try {
+          await audioPlayerEl.play();
+        } catch (_) {
+          setAudioStatus("Browser blocked autoplay, click PLAY again");
+        }
+      });
+    }
+    if (audioPauseBtn) {
+      audioPauseBtn.addEventListener("click", () => {
+        if (!audioPlayerEl) return;
+        audioPlayerEl.pause();
+      });
+    }
+    if (audioReloadBtn) {
+      audioReloadBtn.addEventListener("click", reloadAudioSource);
+    }
+
+    function updateClock() {
+      const now = new Date();
+      document.getElementById("sys-clock").innerText =
+        now.toLocaleString("zh-TW", { hour12: false });
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    function updateUptime() {
+      const sec = Math.floor((Date.now() - bootTs) / 1000);
+      const h = String(Math.floor(sec / 3600)).padStart(2, "0");
+      const m = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
+      const s = String(sec % 60).padStart(2, "0");
+      document.getElementById("uptime").innerText = `${h}:${m}:${s}`;
+    }
+    setInterval(updateUptime, 1000);
+    updateUptime();
+
+    function setConnected(ok) {
+      if (ok) {
+        connStatusEl.className = "conn-indicator";
+        connStatusEl.innerHTML = '<span class="material-symbols-outlined" style="font-size:14px;">check_circle</span> SERVER_CONNECTED';
+      } else {
+        connStatusEl.className = "conn-indicator error";
+        connStatusEl.innerHTML = '<span class="material-symbols-outlined" style="font-size:14px;">error</span> CONNECTION_LOST';
+      }
+    }
+
+    function updateStateUI(data) {
+      const nav = data.navigation || {};
+      const fusion = data.fusion || {};
+      const tl = data.traffic_light || {};
+      const item = data.item_search || {};
+      const family = data.family || {};
+      const gps = family.last_gps || {};
+      const fall = family.fall || {};
+      const health = data.server_health || {};
+      const mapUrl = gps.map_url || "";
+      const motionZh = zhMotion(fusion.motion_state, fusion.is_moving);
+      const turningZh = zhTurning(fusion.turning);
+      const motionClass = motionZh === "移動中" ? "chip-move" : "chip-stop";
+
+      telemetryEl.innerHTML = [
+        `<div class="telemetry-grid">`,
+        `  <div class="telemetry-chip"><span class="chip-key">移動</span><span class="chip-val ${motionClass}">${esc(motionZh)}</span></div>`,
+        `  <div class="telemetry-chip"><span class="chip-key">轉向</span><span class="chip-val chip-turn">${esc(turningZh)}</span></div>`,
+        `  <div class="telemetry-chip"><span class="chip-key">Heading</span><span class="chip-val mono-num">${fmtNum(fusion.heading_deg, 1)}°</span></div>`,
+        `  <div class="telemetry-chip"><span class="chip-key">IMU Age</span><span class="chip-val mono-num">${fmtNum(health.last_imu_age_sec, 2)}s</span></div>`,
+        `</div>`,
+        `<table class="axis-table">`,
+        `  <tr><td class="axis-name">Gyro X</td><td class="axis-val mono-num">${fmtNum(fusion.gx)}</td></tr>`,
+        `  <tr><td class="axis-name">Gyro Y</td><td class="axis-val mono-num">${fmtNum(fusion.gy)}</td></tr>`,
+        `  <tr><td class="axis-name">Gyro Z</td><td class="axis-val mono-num">${fmtNum(fusion.gz)}</td></tr>`,
+        `  <tr><td class="axis-name">Acc X</td><td class="axis-val mono-num">${fmtNum(fusion.ax)}</td></tr>`,
+        `  <tr><td class="axis-name">Acc Y</td><td class="axis-val mono-num">${fmtNum(fusion.ay)}</td></tr>`,
+        `  <tr><td class="axis-name">Acc Z</td><td class="axis-val mono-num">${fmtNum(fusion.az)}</td></tr>`,
+        `</table>`
+      ].join("");
+
+      navEl.innerHTML = [
+        `mode: <span class="ok">${esc(data.mode)}</span>`,
+        `last_tts: ${esc(nav.last_tts)}`,
+        `next_step: ${esc(stepText(nav.next_step))}`,
+        `traffic: ${esc(tl.state)} / color: ${esc(tl.last_color)}`,
+        `traffic_tts: ${esc(tl.last_tts_text)}`,
+        `item_search: ${item.active ? "ON" : "OFF"} / ${esc(item.phase)}`,
+        `item_target: ${esc(item.target)} / guidance: ${esc(item.last_guidance)}`,
+        `vision_status: ${esc(item.vision_status)}`
+      ].join("<br>");
+
+      gpsEl.innerHTML = [
+        `esp32_ip: ${esc(data.esp32_ip)}`,
+        `gps: ${safe(gps.lat)}, ${safe(gps.lng)}`,
+        `line_notify: ${family.line_notify_enable ? "ON" : "OFF"}`,
+        `fall: ${fall.active ? "ALERT" : "normal"}`,
+        `uptime_s: ${safe(health.uptime_sec)}`,
+        `map: ${mapUrl ? `<a href="${mapUrl}" target="_blank" rel="noreferrer">open</a>` : "-"}`
+      ].join("<br>");
+
+      // Vision confidence display
+      const vision = data.vision || {};
+      const topK = vision.top_k || [];
+      let visionLines = [
+        `model: ${vision.model_loaded ? '<span class="ok">LOADED</span>' : '<span class="err">NOT LOADED</span>'}`,
+        `detections: ${vision.detection_count || 0}`,
+        `top_target: ${esc(vision.last_target || "-")} (${(vision.last_confidence || 0).toFixed(3)})`
+      ];
+      if (topK.length > 0) {
+        visionLines.push("--- top-k ---");
+        topK.forEach((d, i) => {
+          const bar = "\u2588".repeat(Math.round(d.confidence * 20));
+          const bbox = Array.isArray(d.bbox) ? d.bbox.join(",") : "-";
+          visionLines.push(`${i+1}. ${esc(d.class)} <span class="mono-num">${d.confidence.toFixed(3)}</span> ${bar}`);
+          visionLines.push(`   bbox: [${esc(bbox)}] / model: ${esc(d.model || "-")}`);
+        });
+      }
+      visionEl.innerHTML = visionLines.join("<br>");
+
+      voiceEl.innerHTML = "";
+      (data.recent_voice || []).slice().reverse().forEach((v) => {
+        const li = document.createElement("li");
+        li.textContent = v.text || "-";
+        voiceEl.appendChild(li);
+      });
+      if (!voiceEl.children.length) {
+        const li = document.createElement("li");
+        li.textContent = "等待語音資料...";
+        voiceEl.appendChild(li);
+      }
+    }
+
+    async function pollState() {
+      try {
+        const res = await fetch("/api/monitor/state", { cache: "no-store" });
+        if (!res.ok) throw new Error("state fetch failed");
+        const data = await res.json();
+        updateStateUI(data);
+        setConnected(true);
+      } catch (_) {
+        setConnected(false);
+      }
+    }
+
+    async function pollEvents() {
+      try {
+        const res = await fetch("/api/monitor/events?limit=8", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        eventsEl.innerHTML = "";
+        (data.events || []).slice().reverse().forEach((ev) => {
+          const li = document.createElement("li");
+          li.textContent = `${ev.type}: ${JSON.stringify(ev.payload || {})}`;
+          eventsEl.appendChild(li);
+        });
+        if (!eventsEl.children.length) {
+          const li = document.createElement("li");
+          li.textContent = "尚無事件";
+          eventsEl.appendChild(li);
+        }
+      } catch (_) {}
+    }
+
+    function setFrameStatus(ok, hint) {
+      if (ok) {
+        offlineEl.style.display = "none";
+        frameEl.style.display = "block";
+        if (offline3d?.running) offline3d.stop();
+      } else {
+        offlineEl.style.display = "flex";
+        frameEl.style.display = "none";
+        if (offline3d && !offline3d.running) offline3d.start();
+      }
+      if (frameHintEl) frameHintEl.textContent = hint;
+    }
+
+    function initOffline3dGlasses() {
+      if (!offline3dCanvas) return null;
+      const renderer = new THREE.WebGLRenderer({
+        canvas: offline3dCanvas,
+        antialias: true,
+        alpha: true,
+      });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 0.85;
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 40);
+      camera.position.set(0, 0.06, 5.35);
+
+      const matFrame = new THREE.MeshStandardMaterial({ color: 0x2f3336, roughness: 0.86, metalness: 0.06 });
+      const matRim = new THREE.MeshStandardMaterial({ color: 0x22262a, roughness: 0.78, metalness: 0.08 });
+      const matLens = new THREE.MeshPhysicalMaterial({
+        color: 0xc2c8cf, roughness: 0.04, metalness: 0.05, transmission: 0.3,
+        thickness: 0.3, ior: 1.5, transparent: true, opacity: 0.68
+      });
+      const matAccent = new THREE.MeshStandardMaterial({
+        color: 0x3d434a, roughness: 0.34, metalness: 0.72
+      });
+
+      const glasses = new THREE.Group();
+      const lensSpacing = 0.56;
+
+      function roundedRectShape(width, height, radius) {
+        const w = width / 2;
+        const h = height / 2;
+        const r = Math.min(radius, w, h);
+        const shape = new THREE.Shape();
+        shape.moveTo(-w + r, -h);
+        shape.lineTo(w - r, -h);
+        shape.quadraticCurveTo(w, -h, w, -h + r);
+        shape.lineTo(w, h - r);
+        shape.quadraticCurveTo(w, h, w - r, h);
+        shape.lineTo(-w + r, h);
+        shape.quadraticCurveTo(-w, h, -w, h - r);
+        shape.lineTo(-w, -h + r);
+        shape.quadraticCurveTo(-w, -h, -w + r, -h);
+        return shape;
+      }
+
+      // Upper edge flat, lower edge rounder (as requested).
+      function flatTopRoundBottomShape(width, height, bottomRound = 0.2, topCorner = 0.06, topArc = 0.0, bottomArc = 0.0) {
+        const w = width / 2;
+        const h = height / 2;
+        const rb = Math.min(bottomRound, w, h);
+        const rt = Math.min(topCorner, w, h);
+        const shape = new THREE.Shape();
+        // Start from top-left and keep top flat with a subtle arc.
+        shape.moveTo(-w + rt, h);
+        if (Math.abs(topArc) > 0.0001) {
+          shape.quadraticCurveTo(0, h + topArc, w - rt, h);
+        } else {
+          shape.lineTo(w - rt, h);
+        }
+        shape.quadraticCurveTo(w, h, w, h - rt);
+        // Right side down.
+        shape.lineTo(w, -h + rb);
+        // Round bottom corner + curved bottom edge.
+        shape.quadraticCurveTo(w, -h, w - rb, -h);
+        if (Math.abs(bottomArc) > 0.0001) {
+          shape.quadraticCurveTo(0, -h - bottomArc, -w + rb, -h);
+        } else {
+          shape.lineTo(-w + rb, -h);
+        }
+        shape.quadraticCurveTo(-w, -h, -w, -h + rb);
+        // Left side up.
+        shape.lineTo(-w, h - rt);
+        shape.quadraticCurveTo(-w, h, -w + rt, h);
+        return shape;
+      }
+
+      function createLensSet(x) {
+        const g = new THREE.Group();
+        // Clear upside-down D silhouette (rounded top + flatter bottom).
+        const outer = flatTopRoundBottomShape(0.98, 0.50, 0.30, 0.045, 0.01, 0.055);
+        const inner = flatTopRoundBottomShape(0.86, 0.40, 0.25, 0.035, 0.006, 0.038);
+        outer.holes.push(inner);
+
+        const rimGeo = new THREE.ExtrudeGeometry(outer, {
+          depth: 0.052,
+          bevelEnabled: true,
+          bevelThickness: 0.007,
+          bevelSize: 0.007,
+          bevelSegments: 2,
+        });
+        rimGeo.center();
+        const rim = new THREE.Mesh(rimGeo, matFrame);
+        rim.rotation.y = 0.026 * Math.sign(x);
+        g.add(rim);
+
+        const lensShape = flatTopRoundBottomShape(0.84, 0.38, 0.23, 0.028, 0.004, 0.03);
+        const lensGeo = new THREE.ExtrudeGeometry(lensShape, {
+          depth: 0.014,
+          bevelEnabled: true,
+          bevelThickness: 0.002,
+          bevelSize: 0.002,
+          bevelSegments: 2,
+        });
+        lensGeo.center();
+        const lens = new THREE.Mesh(lensGeo, matLens);
+        lens.rotation.y = 0.026 * Math.sign(x);
+        lens.position.z = 0.013;
+        g.add(lens);
+
+        g.position.set(x, -0.015, 0);
+        return g;
+      }
+
+      glasses.add(createLensSet(-lensSpacing));
+      glasses.add(createLensSet(lensSpacing));
+
+      const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.052, 0.05), matFrame);
+      bridge.position.set(0, 0.018, 0.004);
+      glasses.add(bridge);
+
+      // Slight arc on upper frame (not fully squared).
+      const topBarCurve = new THREE.CubicBezierCurve3(
+        new THREE.Vector3(-0.96, 0.22, 0.0),
+        new THREE.Vector3(-0.35, 0.248, 0.008),
+        new THREE.Vector3(0.35, 0.248, 0.008),
+        new THREE.Vector3(0.96, 0.22, 0.0)
+      );
+      const topBar = new THREE.Mesh(new THREE.TubeGeometry(topBarCurve, 36, 0.03, 10, false), matFrame);
+      glasses.add(topBar);
+
+      function createTemple(sign) {
+        // Common sunglasses style: chunky end piece + barrel hinge + mostly straight temple.
+        const endPiece = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.14), matFrame);
+        endPiece.position.set(sign * (lensSpacing + 0.43), 0.14, -0.05);
+        glasses.add(endPiece);
+
+        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.07, 12), matRim);
+        barrel.rotation.z = Math.PI / 2;
+        barrel.position.set(sign * (lensSpacing + 0.49), 0.14, -0.06);
+        glasses.add(barrel);
+
+        const templeBase = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.085, 0.34), matFrame);
+        templeBase.position.set(sign * (lensSpacing + 0.55), 0.14, -0.27);
+        templeBase.rotation.y = sign * 0.06;
+        glasses.add(templeBase);
+
+        const templeCurve = new THREE.CubicBezierCurve3(
+          new THREE.Vector3(sign * (lensSpacing + 0.58), 0.13, -0.43),
+          new THREE.Vector3(sign * (lensSpacing + 0.62), 0.13, -0.95),
+          new THREE.Vector3(sign * (lensSpacing + 0.60), 0.02, -1.38),
+          new THREE.Vector3(sign * (lensSpacing + 0.50), -0.15, -1.76)
+        );
+        const templeArm = new THREE.Mesh(new THREE.TubeGeometry(templeCurve, 34, 0.026, 10, false), matFrame);
+        glasses.add(templeArm);
+
+        // Smooth lower fillet from frame bottom into end piece.
+        const lowerArc = new THREE.CubicBezierCurve3(
+          new THREE.Vector3(sign * (lensSpacing + 0.34), 0.03, 0.01),
+          new THREE.Vector3(sign * (lensSpacing + 0.40), 0.01, -0.02),
+          new THREE.Vector3(sign * (lensSpacing + 0.45), 0.04, -0.08),
+          new THREE.Vector3(sign * (lensSpacing + 0.50), 0.08, -0.16)
+        );
+        const lowerArcMesh = new THREE.Mesh(new THREE.TubeGeometry(lowerArc, 16, 0.015, 8, false), matFrame);
+        glasses.add(lowerArcMesh);
+      }
+      createTemple(-1);
+      createTemple(1);
+
+      glasses.position.y = -0.05;
+      glasses.scale.y = 0.9;
+      scene.add(glasses);
+
+      scene.add(new THREE.AmbientLight(0x131317, 0.4));
+      const key = new THREE.DirectionalLight(0xe2e8f0, 1.1);
+      key.position.set(2.6, 2.4, 3.8);
+      scene.add(key);
+      const rim = new THREE.DirectionalLight(0xd7dde4, 0.35);
+      rim.position.set(-1.2, 1.4, -4.5);
+      scene.add(rim);
+
+      const clock = new THREE.Clock();
+      let rafId = 0;
+      let running = false;
+
+      function resize() {
+        const rect = offlineEl.getBoundingClientRect();
+        const w = Math.max(1, rect.width);
+        const h = Math.max(1, rect.height);
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+      }
+
+      function renderLoop() {
+        if (!running) return;
+        rafId = requestAnimationFrame(renderLoop);
+        const t = clock.getElapsedTime();
+        glasses.rotation.y = t * 0.23; // slower, calmer idle motion
+        glasses.position.y = -0.05 + Math.sin(t * 0.55) * 0.008;
+        renderer.render(scene, camera);
+      }
+
+      function start() {
+        if (running) return;
+        running = true;
+        resize();
+        renderLoop();
+      }
+
+      function stop() {
+        running = false;
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = 0;
+      }
+
+      window.addEventListener("resize", resize);
+      return { start, stop, resize, get running() { return running; } };
+    }
+
+    function applyDemoData() {
+      updateStateUI(DEMO_STATE);
+      setConnected(true);
+      setAudioStatus("Demo data mode (no backend required)");
+      setFrameStatus(false, "DEMO MODE: 報告展示用假資料");
+      eventsEl.innerHTML = "";
+      if (!DEMO_EVENTS.length) {
+        const li = document.createElement("li");
+        li.textContent = "尚無事件";
+        eventsEl.appendChild(li);
+        return;
+      }
+      DEMO_EVENTS.forEach((ev) => {
+        const li = document.createElement("li");
+        li.textContent = `${ev.type}: ${JSON.stringify(ev.payload || {})}`;
+        eventsEl.appendChild(li);
+      });
+    }
+
+    function connectWs(url, handlers) {
+      const ws = new WebSocket(url);
+      ws.onopen = () => { handlers._retries = 0; handlers.onopen?.(); };
+      ws.onmessage = (e) => handlers.onmessage?.(e);
+      ws.onclose = () => {
+        handlers.onclose?.();
+        const retries = (handlers._retries = (handlers._retries || 0) + 1);
+        const delay = Math.min(30000, 1000 * (2 ** retries));
+        setTimeout(() => connectWs(url, handlers), delay);
+      };
+      ws.onerror = () => {};
+      return ws;
+    }
+
+    const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+    const wsBase = `${wsProto}//${location.host}`;
+
+    connectWs(wsBase + "/ws/viewer", {
+      onopen: () => setFrameStatus(false, "WS connected, waiting frame..."),
+      onmessage: (e) => {
+        const blob = new Blob([e.data], { type: "image/jpeg" });
+        const url = URL.createObjectURL(blob);
+        if (lastFrameUrl) URL.revokeObjectURL(lastFrameUrl);
+        lastFrameUrl = url;
+        frameEl.src = url;
+        setFrameStatus(true, "Live stream via /ws/viewer");
+      }
+    });
+
+    connectWs(wsBase + "/ws_ui", {
+      onmessage: (e) => {
+        try { updateStateUI(JSON.parse(e.data)); } catch (_) {}
+      }
+    });
+
+    let frameHttpMs = 120;
+    let frameHttpTimer = null;
+    let lastFrameEtag = "";
+    function scheduleFrameHttpPoll() {
+      if (frameHttpTimer) clearTimeout(frameHttpTimer);
+      frameHttpTimer = setTimeout(async () => {
+        try {
+          const headers = {};
+          if (lastFrameEtag) headers["If-None-Match"] = lastFrameEtag;
+          const res = await fetch("/api/monitor/frame", { cache: "no-store", headers });
+          const etag = res.headers.get("ETag") || "";
+          if (res.status === 304 && etag) {
+            lastFrameEtag = etag;
+            frameHttpMs = Math.min(2000, Math.floor(frameHttpMs * 1.15));
+            scheduleFrameHttpPoll();
+            return;
+          }
+          if (res.status === 204 || !res.ok) {
+            frameHttpMs = Math.min(3000, Math.floor(frameHttpMs * 1.35));
+            if (frameEl.src === "") setFrameStatus(false, "No frame yet, polling /api/monitor/frame...");
+            scheduleFrameHttpPoll();
+            return;
+          }
+          const blob = await res.blob();
+          if (!blob.size) {
+            frameHttpMs = Math.min(3000, Math.floor(frameHttpMs * 1.35));
+            scheduleFrameHttpPoll();
+            return;
+          }
+          if (etag) lastFrameEtag = etag;
+          frameHttpMs = 120;
+          const url = URL.createObjectURL(blob);
+          if (lastFrameUrl) URL.revokeObjectURL(lastFrameUrl);
+          lastFrameUrl = url;
+          frameEl.src = url;
+          setFrameStatus(true, "Fallback frame via /api/monitor/frame");
+        } catch (_) {
+          frameHttpMs = Math.min(3000, Math.floor(frameHttpMs * 1.35));
+        }
+        scheduleFrameHttpPoll();
+      }, frameHttpMs);
+    }
+
+    if (REPORT_DEMO_MODE) {
+      offline3d = initOffline3dGlasses();
+      applyDemoData();
+    } else {
+      offline3d = initOffline3dGlasses();
+      pollState();
+      pollEvents();
+      setInterval(pollState, 800);
+      setInterval(pollEvents, 1000);
+      scheduleFrameHttpPoll();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+# 建議：Python 3.11–3.14，並使用專案內 `python -m venv .venv` 後再安裝。
+# 驗證：`pip install -r requirements.txt` → `pip check` → `python -c "import main"`（於本目錄）。
+# Ultralytics 若頻繁打 GitHub API，可設環境變數 GITHUB_TOKEN 降低 rate limit 警告。
+
+fastapi>=0.109.0
+python-dotenv>=1.0.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.6
+requests>=2.31.0
+pydantic>=2.0.0
+line-bot-sdk>=2.4.2
+
+# 任務 2
+numpy>=1.24.0
+onnxruntime>=1.16.0
+opencv-python-headless>=4.8.0
+
+# 任務 3
+google-generativeai>=0.3.0
+edge-tts>=6.1.0
+Pillow>=10.0.0
+
+# 任務 物品查找（YOLOE + MediaPipe）所需（若模型未啟用，仍可回退 Gemini）
+mediapipe
+ultralytics
+torch
+
+# ASR（台灣版）：本地 faster-whisper（CPU）
+faster-whisper
+
+# 舊版相容（可選）
+gtts>=2.5.0
