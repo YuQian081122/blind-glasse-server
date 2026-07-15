@@ -8,7 +8,7 @@
 
 ## 受阻（BLOCKED）
 
-- Web trigger 實機燒錄／serial 驗證：server 與韌體程式已完成、server tests 與 firmware build 通過，但 COM3 目前可列舉卻拒絕開啟，無法燒錄新版韌體驗證網頁按鈕觸發。需手動釋放 COM3（關閉 Serial Monitor/Arduino IDE/其他終端，必要時拔插 XIAO ESP32-S3）後重跑 `py -3 -m platformio run -e mictest -t upload` 與按鈕觸發驗證。
+（無）
 
 ## 硬體備註
 
@@ -17,6 +17,14 @@
 - 裝置無實體按鈕；mictest 韌體觸發只能使用自動間隔或序列埠指令。
 
 ## 迭代日誌
+
+### 迭代 11 — 2026-07-15 14:55
+- 任務：Web trigger 實機燒錄與按鈕觸發驗證。
+- 結果：DONE（ASR 內容仍需使用者實際對眼鏡說話驗收）。
+- 變更檔案：`docs/plans/status/mictest_status.md`。
+- 備註：COM3 釋放後已成功燒錄 firmware `5fd0ccb` 的 web-trigger mictest 韌體；mictest-only server 與 Cloudflare tunnel 啟動後，公開 `/mictest` 頁面可載入，按鈕可下發一次性錄音命令。先用 API trigger 驗證 serial 完整鏈路，再用瀏覽器實際點「開始錄音 3 秒」確認頁面按鈕也會觸發韌體錄音。
+- 驗證：`py -3 -m platformio run -e mictest -t upload` → SUCCESS。API trigger `POST https://www.blind-glasses.org/api/mictest/trigger` → `id=1 status=queued`；serial 顯示 `command trigger id=1`、`record done pcm_bytes=96000 wav_bytes=96044`、`POST /api/mictest code=200 upload_ms=7229 bytes=96044`、`playback start wait_ms=2150 ...`、`playback done elapsed_ms=8168 ran=yes`。瀏覽器實際點 `/mictest` 按鈕後，public state 顯示 `seq=3`、`duration_sec=3.0`、`record_request_id=2`、`record_status=uploaded`、`tts_ready=true`；瀏覽器 DOM 顯示 `#2 uploaded`、`duration=3s`、`tts=ready`。此次未對眼鏡說話，因此 ASR 仍顯示 `ASR_EMPTY`，不代表按鈕觸發鏈路失敗。
+- push：本筆紀錄隨 root docs commit 推送到 `mictest-mt-f2-docs`。
 
 ### 迭代 10 — 2026-07-15 13:40
 - 任務：MT-E1 前調整為 `/mictest` 網頁按鈕觸發錄音，避免固定 15 秒自動錄到空白。
