@@ -62,7 +62,7 @@
   同時依 §1.1 把 `config.h` 的 I2S 腳位改成實際接線（`I2S_LRC_PIN=1、I2S_BCLK_PIN=2、I2S_DOUT_PIN=3`），並在 status 檔記一筆「腳位校正」提醒之後更新韌體 README 的腳位表。
   - 驗證：`py -3 -m platformio run -e mictest` 綠（先放一個空 `setup/loop`）；`pio run -e seeed_xiao_esp32s3` 仍綠。
 - [x] **MT-F2** `src/mictest/main_mictest.cpp` 最小流程：連 Wi‑Fi（沿用 config.h/secrets 機制）→ 錄 3 秒 PDM 16kHz WAV（搬用 `mic_upload.cpp` 的 I2S0 初始化與 WAV header 程式碼，複製到 mictest 內，不 include 主 src）→ HTTPS POST `https://www.blind-glasses.org/api/mictest`（帶 `X-Device-Token`）。
-  - 觸發方式（無按鈕）：預設**每 15 秒自動一輪**；序列埠輸入 `r` 立即錄一次、`i <ms>` 改間隔。
+  - 觸發方式（無按鈕）：預設由 `/mictest` 網頁「開始錄音」按鈕下發一次性命令；序列埠輸入 `r` 立即錄一次、`i <ms>` 開啟自動間隔、`i 0` 關閉自動間隔。
   - 序列日誌統一 `[MICTEST]` 前綴：錄音樣本數、上傳耗時、HTTP 狀態碼。
   - 驗證：燒錄 `-e mictest`，serial 看到 POST 200；`/mictest` 頁面出現真實波形（**環境音即可，尚不需人講話**）。
 - [x] **MT-F3** 回覆播放：POST 成功後輪詢 `GET /api/mictest/reply.mp3`（If-None-Match，最多等 30s），拿到新音檔用 ESP32-audioI2S（`I2S_NUM_1`）播放；播放期間暫停錄音（先錄後播、不同 I2S port，時序上完全錯開最保險）。

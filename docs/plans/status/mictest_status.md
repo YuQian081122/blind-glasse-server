@@ -8,7 +8,7 @@
 
 ## 受阻（BLOCKED）
 
-（無）
+- Web trigger 實機燒錄／serial 驗證：server 與韌體程式已完成、server tests 與 firmware build 通過，但 COM3 目前可列舉卻拒絕開啟，無法燒錄新版韌體驗證網頁按鈕觸發。需手動釋放 COM3（關閉 Serial Monitor/Arduino IDE/其他終端，必要時拔插 XIAO ESP32-S3）後重跑 `py -3 -m platformio run -e mictest -t upload` 與按鈕觸發驗證。
 
 ## 硬體備註
 
@@ -17,6 +17,14 @@
 - 裝置無實體按鈕；mictest 韌體觸發只能使用自動間隔或序列埠指令。
 
 ## 迭代日誌
+
+### 迭代 10 — 2026-07-15 13:40
+- 任務：MT-E1 前調整為 `/mictest` 網頁按鈕觸發錄音，避免固定 15 秒自動錄到空白。
+- 結果：PARTIAL / BLOCKED（server 與韌體程式完成；實機燒錄驗證受 COM3 鎖定阻塞）。
+- 變更檔案：`server/mictest_api.py`、`server/static/mictest.html`、`server/tests/test_mictest.py`、`firmware/src/mictest/main.cpp`、`docs/plans/mic_test_plan.md`、`docs/plans/status/mictest_status.md`。
+- 備註：server 新增一次性錄音命令：`POST /api/mictest/trigger` 會遞增 `record_request_id` 並設為 `queued`，`GET /api/mictest/command` 供韌體輪詢；收到 WAV 後 command status 變 `uploaded`。`/mictest` 頁面新增「開始錄音 3 秒」按鈕與命令狀態提示。韌體預設不再每 15 秒自動錄音，改為空閒時每秒輪詢 command，看到新的 `queued` request id 才錄 3 秒、上傳、等待 TTS 並播放；serial `r` 保留立即錄音，`i <ms>` 可重新啟用自動間隔，`i 0` 關閉。
+- 驗證：server TDD：新增 trigger/command 測試後先看到 `/api/mictest/trigger` 404；實作後 `.local_cache\mictest-venv\Scripts\python.exe -m unittest discover -s tests -p "test_mictest.py" -v` → 10 tests OK、1 integration skipped。頁面靜態測試先因缺 `/api/mictest/trigger`/`recordButton` 失敗，補 HTML/JS 後通過。`py -3 -m platformio run -e mictest` → SUCCESS。啟動本機 mictest-only server 後 HTTP 驗證：`POST /api/mictest/trigger` → `id=1 status=queued`，`GET /api/mictest/command` → `id=1 status=queued`。COM3 驗證失敗：`.NET SerialPort('COM3').Open()` 仍拒絕存取，查無含 COM3/platformio/esptool 的可見程序，故尚未燒錄新版韌體。
+- push：server `265a647` 已推送到 server `origin/main`；firmware `5fd0ccb` 已推送到 firmware `origin/main`；root docs 待推送。
 
 ### 迭代 9 — 2026-07-15 13:25
 - 任務：MT-F3 COM3 釋放後重試燒錄與回覆播放驗證。
