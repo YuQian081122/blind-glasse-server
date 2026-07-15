@@ -1,4 +1,5 @@
 import io
+from pathlib import Path
 import unittest
 import wave
 from unittest import mock
@@ -19,6 +20,21 @@ def _make_wav(duration_sec: float = 0.05, sample_rate: int = 16000) -> bytes:
         wav.setframerate(sample_rate)
         wav.writeframes(b"\x00\x00" * frames)
     return buf.getvalue()
+
+
+class MicTestPageTest(unittest.TestCase):
+    def test_mictest_page_contains_waveform_and_audio_controls(self):
+        page = Path(__file__).resolve().parents[1] / "static" / "mictest.html"
+
+        html = page.read_text(encoding="utf-8")
+
+        self.assertIn('id="waveform"', html)
+        self.assertIn('id="latestAudio"', html)
+        self.assertIn('id="replyAudio"', html)
+        self.assertIn("/api/mictest/state", html)
+        self.assertIn("/api/mictest/latest.wav", html)
+        self.assertIn("/api/mictest/reply.mp3", html)
+        self.assertIn("decodeAudioData", html)
 
 
 class MicTestApiTest(unittest.TestCase):

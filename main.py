@@ -905,6 +905,14 @@ async def monitor_page():
     return FileResponse(path, media_type="text/html")
 
 
+@app.get("/mictest")
+async def mictest_page():
+    path = os.path.join(os.path.dirname(__file__), "static", "mictest.html")
+    if not os.path.exists(path):
+        return _api_error("mictest_page_not_found", 404)
+    return FileResponse(path, media_type="text/html")
+
+
 @app.get("/monitor/vendor/three.module.js")
 async def monitor_three_module():
     path = os.path.join(os.path.dirname(__file__), "static", "vendor", "three.module.js")

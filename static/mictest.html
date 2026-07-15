@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blind Glasses Mic Test</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f172a;
+      color: #e5e7eb;
+    }
+
+    body {
+      margin: 0;
+      padding: 24px;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+    }
+
+    .muted {
+      color: #94a3b8;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin: 20px 0;
+    }
+
+    .card {
+      border: 1px solid #334155;
+      border-radius: 14px;
+      padding: 16px;
+      background: #111827;
+    }
+
+    .label {
+      margin-bottom: 6px;
+      color: #94a3b8;
+      font-size: 13px;
+    }
+
+    .value {
+      min-height: 24px;
+      font-size: 18px;
+      overflow-wrap: anywhere;
+    }
+
+    #waveform {
+      width: 100%;
+      height: 240px;
+      border: 1px solid #334155;
+      border-radius: 14px;
+      background: #020617;
+    }
+
+    audio {
+      width: 100%;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>麥克風端到端測試</h1>
+    <p class="muted">每 2 秒輪詢 <code>/api/mictest/state</code>；收到新 seq 時下載 WAV、繪製波形並更新播放器。</p>
+
+    <canvas id="waveform" width="1000" height="240" aria-label="最新錄音波形"></canvas>
+
+    <section class="grid" aria-label="mictest state">
+      <div class="card">
+        <div class="label">序號</div>
+        <div id="seq" class="value">-</div>
+      </div>
+      <div class="card">
+        <div class="label">錄音收到時間</div>
+        <div id="receivedAt" class="value">-</div>
+      </div>
+      <div class="card">
+        <div class="label">錄音長度</div>
+        <div id="duration" class="value">-</div>
+      </div>
+      <div class="card">
+        <div class="label">ASR 耗時</div>
+        <div id="asrMs" class="value">-</div>
+      </div>
+      <div class="card">
+        <div class="label">TTS 狀態</div>
+        <div id="ttsStatus" class="value">-</div>
+      </div>
+      <div class="card">
+        <div class="label">TTS 耗時</div>
+        <div id="ttsMs" class="value">-</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="label">ASR 文字</div>
+      <div id="asrText" class="value">-</div>
+    </section>
+
+    <section class="card" style="margin-top: 12px;">
+      <div class="label">回覆文字</div>
+      <div id="replyText" class="value">-</div>
+    </section>
+
+    <section class="grid">
+      <div class="card">
+        <div class="label">最新錄音 WAV</div>
+        <audio id="latestAudio" controls></audio>
+      </div>
+      <div class="card">
+        <div class="label">回覆 MP3</div>
+        <audio id="replyAudio" controls></audio>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const stateUrl = "/api/mictest/state";
+    const latestWavUrl = "/api/mictest/latest.wav";
+    const replyMp3Url = "/api/mictest/reply.mp3";
+    const pollIntervalMs = 2000;
+
+    let lastSeq = 0;
+    let audioContext = null;
+
+    const setText = (id, value) => {
+      document.getElementById(id).textContent = value || "-";
+    };
+
+    const cacheBusted = (url) => `${url}?t=${Date.now()}`;
+
+    const drawEmptyWaveform = (message) => {
+      const canvas = document.getElementById("waveform");
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#020617";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "20px system-ui";
+      ctx.fillText(message, 24, 48);
+    };
+
+    const drawWaveform = (audioBuffer) => {
+      const canvas = document.getElementById("waveform");
+      const ctx = canvas.getContext("2d");
+      const width = canvas.width;
+      const height = canvas.height;
+      const data = audioBuffer.getChannelData(0);
+      const step = Math.max(1, Math.floor(data.length / width));
+
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = "#020617";
+      ctx.fillRect(0, 0, width, height);
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+
+      for (let x = 0; x < width; x += 1) {
+        let min = 1;
+        let max = -1;
+        const start = x * step;
+        for (let i = 0; i < step && start + i < data.length; i += 1) {
+          const sample = data[start + i];
+          if (sample < min) min = sample;
+          if (sample > max) max = sample;
+        }
+        const y1 = ((1 + min) * height) / 2;
+        const y2 = ((1 + max) * height) / 2;
+        ctx.moveTo(x, y1);
+        ctx.lineTo(x, y2);
+      }
+      ctx.stroke();
+    };
+
+    const updateWaveform = async () => {
+      const res = await fetch(cacheBusted(latestWavUrl), { cache: "no-store" });
+      if (!res.ok) {
+        drawEmptyWaveform(`latest.wav HTTP ${res.status}`);
+        return;
+      }
+
+      const arr = await res.arrayBuffer();
+      audioContext = audioContext || new (window.AudioContext || window.webkitAudioContext)();
+      const audioBuffer = await audioContext.decodeAudioData(arr.slice(0));
+      drawWaveform(audioBuffer);
+      document.getElementById("latestAudio").src = cacheBusted(latestWavUrl);
+    };
+
+    const renderState = async () => {
+      const res = await fetch(stateUrl, { cache: "no-store" });
+      if (!res.ok) {
+        setText("asrText", `state HTTP ${res.status}`);
+        return;
+      }
+
+      const state = await res.json();
+      setText("seq", String(state.seq || 0));
+      setText("receivedAt", state.received_at);
+      setText("duration", state.duration_sec == null ? "-" : `${state.duration_sec}s`);
+      setText("asrText", state.asr_text);
+      setText("asrMs", state.asr_ms == null ? "-" : `${state.asr_ms}ms`);
+      setText("replyText", state.reply_text);
+      setText("ttsStatus", state.tts_ready ? "ready" : "waiting");
+      setText("ttsMs", state.tts_ms == null ? "-" : `${state.tts_ms}ms`);
+
+      if (state.seq && state.seq !== lastSeq) {
+        lastSeq = state.seq;
+        await updateWaveform();
+      }
+      if (state.tts_ready) {
+        document.getElementById("replyAudio").src = cacheBusted(replyMp3Url);
+      }
+    };
+
+    drawEmptyWaveform("等待錄音...");
+    renderState().catch((err) => setText("asrText", String(err)));
+    setInterval(() => {
+      renderState().catch((err) => setText("asrText", String(err)));
+    }, pollIntervalMs);
+  </script>
+</body>
+</html>
